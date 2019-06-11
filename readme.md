@@ -1,4 +1,6 @@
 
 # FooBar
 
-A set of responses to Google's foobar challenge/ quiz/ game, from June 2019. 
+Google's `foobar` challenge/ quiz/ game.  From June 2019.  
+
+![bunny.gif](./bunny_level1.gif)
