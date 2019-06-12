@@ -66,19 +66,6 @@ def identity_matrix(rank):
     return rval
 
 
-#
-# I = [[Fraction(1, 1), Fraction(0, 1)],
-#      [Fraction(0, 1), Fraction(1, 1)]]
-#
-# for r in range(2,10):
-#     print(r)
-#     I = identity_matrix(r)
-#     print(I)
-#     inv = getMatrixInverse(I)
-#     print(inv)
-#     assert (inv == I)
-
-
 def gcd(a, b):
     """Return greatest common divisor using Euclid's Algorithm."""
     while b:
@@ -105,7 +92,7 @@ def zeroMatrix(x, y):
     return [newRow(y) for _ in range(x)]
 
 
-def matrixMult(X, Y):
+def matrix_mult(X, Y):
     rv = zeroMatrix(len(X), len(Y[0]))
     for i in range(len(X)):
         for j in range(len(Y[0])):
@@ -114,31 +101,84 @@ def matrixMult(X, Y):
     return rv
 
 
-def solution(m):
-    num_end_states = 0
-    for row in m:
-        if sum(row) == 0:
-            num_end_states += 1
-    num_trans_states = len(m) - num_end_states
+def state_matrices(m):
+    """ Parse input `m` into Markov form """
 
     def den(row):
         return max(1, sum(row))
 
-    S = zeroMatrix(len(m), len(m))
-    for (x, row) in enumerate(m):
-        d = den(row)
-        S[x] = [Fraction(k, d) for k in row]
+    def parse_row(n, row):
+        row_type = 'trans'
+        if sum(row) == 0:
+            row_type = 'terminal'
+        return dict(
+            input_row_num=n,
+            row_type=row_type,
+            denom=den(row),
+        )
 
-    # FIXME: might need some row/col re-orders
+    parse_results = [parse_row(k, row) for (k, row) in enumerate(m)]
+
+    # Figure out our order. Transient states all first, then terminal states.
+    rows_in_order = []
+    for row_parse in parse_results:
+        if row_parse['row_type'] == 'trans':
+            row_parse['our_row_num'] = len(rows_in_order)
+            rows_in_order.append(row_parse)
+    num_trans_states = len(rows_in_order)
+    for row_parse in parse_results:
+        if row_parse['row_type'] != 'trans':
+            row_parse['our_row_num'] = len(rows_in_order)
+            rows_in_order.append(row_parse)
+    log(rows_in_order)
+
+    S = zeroMatrix(len(m), len(m))
+    for (x, row_data) in enumerate(rows_in_order):
+        m_data = m[row_data['input_row_num']]
+        den = row_data['denom']
+        for (y, _) in enumerate(m_data):
+            num = m_data[y]
+            S[x][y] = Fraction(num, den)
+
     Q = [row[:num_trans_states] for row in S[:num_trans_states]]
     R = [row[num_trans_states:] for row in S[:num_trans_states]]
-    I = identity_matrix(num_trans_states)
-    ImQ = zeroMatrix(num_trans_states, num_trans_states)
-    for (x, row) in enumerate(Q):
+    return S, Q, R
+
+
+def matrix_subtract(lhs, rhs):
+    assert (len(lhs) == len(rhs))
+    rv = zeroMatrix(len(lhs), len(lhs[0]))
+    # Very manual matrix subtraction
+    for (x, row) in enumerate(lhs):
         for (y, val) in enumerate(row):
-            ImQ[x][y] = I[x][y] - Q[x][y]
+            rv[x][y] = lhs[x][y] - rhs[x][y]
+    return rv
+
+
+def format(results):
+    """ Take our preferred result-format - a list of Fractions -
+    and morph it into Google's - a list of numerators, followed by a shared denominator. """
+    result_lcm = functools.reduce(lcm, [f.denominator for f in results])
+    result_nums = [f.numerator * (result_lcm // f.denominator) for f in results]
+    rval = result_nums + [result_lcm]
+    log("RVAL")
+    log(rval)
+    return rval
+
+
+def solution(m):
+    S, Q, R = state_matrices(m)
+
+    if sum(m[0]) == 0:
+        # Special case for the initial state, also being a final state
+        results = [Fraction(0, 1)] * len(R[0])
+        results[0] = Fraction(1, 1)
+        return format(results)
+
+    I = identity_matrix(len(Q))
+    ImQ = matrix_subtract(I, Q)
     N = get_inverse(ImQ)
-    M = matrixMult(N, R)
+    M = matrix_mult(N, R)
 
     log("m:")
     log(m)
@@ -153,7 +193,7 @@ def solution(m):
     log(ImQ)
     log("N=ImQ**-1:")
     log(N)
-    assert (matrixMult(ImQ, N) == I)
+    assert (matrix_mult(ImQ, N) == I)
     log("M=N*R:")
     log(M)
 
@@ -162,12 +202,7 @@ def solution(m):
     log("RESULTS")
     log(results)
 
-    result_lcm = functools.reduce(lcm, [f.denominator for f in results])
-    result_nums = [f.numerator * (result_lcm // f.denominator) for f in results]
-    rval = result_nums + [result_lcm]
-    log("RVAL")
-    log(rval)
-    return rval
+    return format(results)
 
 
 case = [
@@ -251,4 +286,48 @@ case = [
     [0, 0, 0, 0, 0],
 ]
 result = [1, 0, 0, 0, 1]
+assert (solution(case) == result)
+
+case = [
+    [0, 0, 0, 0, 0],
+    [0, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+]
+result = [1, 0, 0, 0, 1]
+assert (solution(case) == result)
+
+case = [
+    [0, 0, 0, 0, 0, 0],
+    [0, 1, 0, 0, 0, 1],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [4, 0, 0, 3, 2, 0],
+    [0, 0, 0, 0, 0, 0]
+]
+assert (solution(case) == [1, 0, 0, 0, 1])
+
+case = [
+    [0, 0],
+    [1, 1],
+]
+result = [1, 1]
+assert (solution(case) == result)
+
+case = [
+    [0, 0, 0],
+    [1, 1, 1],
+    [1, 1, 1],
+]
+result = [1, 1]
+assert (solution(case) == result)
+
+case = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [1, 1, 1, 1],
+    [1, 1, 1, 1],
+]
+result = [1, 0, 1]
 assert (solution(case) == result)
